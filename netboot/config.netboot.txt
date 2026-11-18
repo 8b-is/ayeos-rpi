@@ -1,0 +1,20 @@
+# ayeos-rpi v0.1 PoC — TFTP netboot config.txt (Pi 3 Model B + Pi 4 Model B)
+arm_64bit=1
+enable_uart=1
+uart_2ndstage=1
+auto_initramfs=0
+
+# Stateless RAM initramfs payload built by netboot/pack_initramfs.sh
+initramfs initramfs.cpio.zst followkernel
+
+[pi3]
+# Minimize VideoCore RAM split on 1 GB Pi 3B (headless worker)
+gpu_mem=16
+
+[pi4]
+gpu_mem=16
+arm_boost=1
+dtparam=eth_led0=0
+
+[all]
+dtoverlay=disable-bt

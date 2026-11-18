@@ -1,4 +1,4 @@
-# ayeos-rpi / kernel / linker.ld — ARM64 bare-metal linker script
+/* ayeos-rpi / kernel / linker.ld — ARM64 bare-metal linker script */
 ENTRY(_start)
 
 SECTIONS

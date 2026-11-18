@@ -1,21 +1,21 @@
 # ayeos-rpi — Makefile
-# Builds kernel8.img (bare-metal ARM64), ayeOS payload, burner (host CLI), nullclaw (on-device agent).
+# Builds kernel8.img (bare-metal ARM64), ayeOS payload, burner (host CLI),
+# nullclaw (on-device / musl mesh agent), and LAN netboot initramfs.
 #
-# Toolchain: aarch64-none-elf-gcc for kernel; cargo for burner/nullclaw.
-#   brew install aarch64-none-elf-gcc   (macOS)
-#   sudo apt install gcc-aarch64-linux-gnu  (Linux)
+# Zero-GCC Toolchain: Zig cc (Clang/LLD) + llvm-objcopy for kernel; cargo + zig cc for burner/nullclaw.
 
 SHELL := /bin/bash
-PREFIX   ?= aarch64-none-elf-
-CC       := $(PREFIX)gcc
-AS       := $(PREFIX)as
-LD       := $(PREFIX)ld
-OBJCOPY  := $(PREFIX)objcopy
+ZIG      ?= zig
+CC       := $(ZIG) cc -target aarch64-freestanding-none
+AS       := $(ZIG) cc -target aarch64-freestanding-none
+LD       := $(ZIG) cc -target aarch64-freestanding-none -nostdlib -Wl,--build-id=none
+OBJCOPY  := $(shell command -v /opt/homebrew/opt/llvm/bin/llvm-objcopy || command -v llvm-objcopy || echo llvm-objcopy)
 
 KERNEL_DIR   := kernel
 AYEOS_DIR    := ayeos
 BURNER_DIR   := burner
 NULLCLAW_DIR := nullclaw
+NETBOOT_DIR  := netboot
 BUILD_DIR    := build
 DIST_DIR     := dist
 
@@ -24,16 +24,17 @@ KERNEL_IMG   := $(DIST_DIR)/kernel8.img
 AYEOS_ELF    := $(BUILD_DIR)/ayeos.elf
 AYEOS_IMG    := $(DIST_DIR)/ayeos.img
 
-CFLAGS   := -Wall -Wextra -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles \
-            -march=armv8-a -mtune=cortex-a72 -I$(KERNEL_DIR) -I$(AYEOS_DIR)
-ASFLAGS  := -march=armv8-a
+CFLAGS   := -Wall -Wextra -O2 -ffreestanding -nostdlib \
+            -mcpu=cortex_a53 -I$(KERNEL_DIR) -I$(AYEOS_DIR)
+ASFLAGS  := -mcpu=cortex_a53
 
 KERNEL_SRCS := $(KERNEL_DIR)/arch/aarch64/entry.S \
                $(KERNEL_DIR)/main.c \
                $(KERNEL_DIR)/uart.c \
                $(KERNEL_DIR)/timer.c \
                $(KERNEL_DIR)/mm.c
-KERNEL_OBJS := $(patsubst $(KERNEL_DIR)/%,$(BUILD_DIR)/kernel/%,$(KERNEL_SRCS:.S=.o:.c=.o))
+KERNEL_OBJS_TMP := $(KERNEL_SRCS:.S=.o)
+KERNEL_OBJS := $(patsubst $(KERNEL_DIR)/%,$(BUILD_DIR)/kernel/%,$(KERNEL_OBJS_TMP:.c=.o))
 
 AYEOS_SRCS := $(AYEOS_DIR)/main.c \
               $(AYEOS_DIR)/init.c \
@@ -45,7 +46,7 @@ AYEOS_OBJS := $(patsubst $(AYEOS_DIR)/%,$(BUILD_DIR)/ayeos/%,$(AYEOS_SRCS:.c=.o)
 KERNEL_LINKER := $(KERNEL_DIR)/linker.ld
 AYEOS_LINKER  := $(AYEOS_DIR)/linker.ld
 
-.PHONY: all kernel ayeos burner nullclaw clean dist flash run
+.PHONY: all kernel ayeos burner nullclaw netboot clean dist flash run help
 
 all: kernel ayeos burner nullclaw dist
 
@@ -58,6 +59,9 @@ burner:
 
 nullclaw:
 	$(MAKE) -C $(NULLCLAW_DIR)
+
+netboot:
+	bash $(NETBOOT_DIR)/pack_initramfs.sh
 
 dist: $(KERNEL_IMG) $(AYEOS_IMG)
 	@mkdir -p $(DIST_DIR)
@@ -77,14 +81,14 @@ $(BUILD_DIR)/ayeos/%.o: $(AYEOS_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(KERNEL_ELF): $(KERNEL_OBJS) $(KERNEL_LINKER)
-	$(LD) -T $(KERNEL_LINKER) -o $@ $(KERNEL_OBJS)
+	$(LD) -Wl,-T,$(KERNEL_LINKER) -o $@ $(KERNEL_OBJS)
 
 $(KERNEL_IMG): $(KERNEL_ELF)
 	@mkdir -p $(DIST_DIR)
 	$(OBJCOPY) -O binary $< $@
 
-$(AYEOS_ELF): $(AYEOS_OBJS) $(AYEOS_LINKER)
-	$(LD) -T $(AYEOS_LINKER) -o $@ $(AYEOS_OBJS)
+$(AYEOS_ELF): $(AYEOS_OBJS) $(BUILD_DIR)/kernel/uart.o $(AYEOS_LINKER)
+	$(LD) -Wl,-T,$(AYEOS_LINKER) -Wl,-e,ayeos_entry -o $@ $(AYEOS_OBJS) $(BUILD_DIR)/kernel/uart.o
 
 $(AYEOS_IMG): $(AYEOS_ELF)
 	@mkdir -p $(DIST_DIR)
@@ -102,4 +106,4 @@ run: $(KERNEL_IMG)
 	@echo "Boot kernel8.img on Pi 3/4 (QEMU: qemu-system-aarch64 -M raspi3b -kernel $(KERNEL_IMG))"
 
 help:
-	@echo "Targets: all kernel ayeos burner nullclaw dist clean flash run"
+	@echo "Targets: all kernel ayeos burner nullclaw netboot dist clean flash run"

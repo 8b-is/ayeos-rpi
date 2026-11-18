@@ -1,4 +1,4 @@
-# ayeos-rpi / ayeos / linker.ld — ayeOS payload linker script
+/* ayeos-rpi / ayeos / linker.ld — ayeOS payload linker script */
 ENTRY(ayeos_entry)
 
 SECTIONS

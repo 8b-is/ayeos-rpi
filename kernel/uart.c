@@ -42,20 +42,20 @@ void uart_init(void) {
     volatile unsigned long *reg = uart_base;
 
     /* Disable UART during config */
-    reg[CR / 4] = 0;
+    reg[UART_CR / 4] = 0;
 
     /* Baud: 115200 @ 48MHz (Pi 3/4 UART clock) -> IBRD=26, FBRD=0x33 approx */
-    reg[IBRD / 4] = 26;
-    reg[FBRD / 4] = 0x33;
-    reg[LCR_H / 4] = (1 << 5) | (1 << 6); /* 8-bit, no parity */
-    reg[CR / 4] = CR_UARTEN | CR_TXE | CR_RXE;
+    reg[UART_IBRD / 4] = 26;
+    reg[UART_FBRD / 4] = 0x33;
+    reg[UART_LCR_H / 4] = (1 << 5) | (1 << 6); /* 8-bit, no parity */
+    reg[UART_CR / 4] = CR_UARTEN | CR_TXE | CR_RXE;
 }
 
 void uart_putc(char c) {
     volatile unsigned long *reg = uart_base;
-    while (reg[FR / 4] & FR_TXFF)
+    while (reg[UART_FR / 4] & FR_TXFF)
         ;
-    reg[DR / 4] = (unsigned long)c;
+    reg[UART_DR / 4] = (unsigned long)c;
 }
 
 void uart_puts(const char *s) {

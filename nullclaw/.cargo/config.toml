@@ -1,0 +1,7 @@
+[build]
+target-dir = "target"
+
+[target.aarch64-unknown-linux-musl]
+linker = "../scripts/zig-aarch64-musl-cc.sh"
+ar = "../scripts/zig-aarch64-musl-ar.sh"
+rustflags = ["-C", "link-self-contained=no"]

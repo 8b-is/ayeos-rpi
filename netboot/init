@@ -1,0 +1,18 @@
+#!/bin/sh
+# ayeos-rpi v0.1 PoC — stateless initramfs PID 1 bootstrap
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+
+SERIAL=$(awk '/^Serial/ {print $3}' /proc/cpuinfo 2>/dev/null | tail -c 9)
+[ -z "$SERIAL" ] && SERIAL="sim0"
+NODE_ID="rpi-${SERIAL}"
+hostname "$NODE_ID" 2>/dev/null || true
+
+echo "[ayeos-init] booting ${NODE_ID} into nullclaw MCP mesh worker"
+exec /bin/nullclaw \
+    --node-id "$NODE_ID" \
+    --skills-dir /etc/agents/skills \
+    --listen 0.0.0.0:18815

@@ -13,7 +13,6 @@ enum PmKind {
     AptGet,
     Apk,
     Brew,
-    Unknown,
 }
 
 impl PackageManager {
@@ -40,17 +39,16 @@ impl PackageManager {
             PmKind::AptGet => "apt-get",
             PmKind::Apk => "apk",
             PmKind::Brew => "brew",
-            PmKind::Unknown => "unknown",
         }
     }
 
+    #[allow(dead_code)]
     pub fn install(&self, pkg: &str) -> Result<(), std::io::Error> {
         let cmd = match self.kind {
             PmKind::Apt => "apt",
             PmKind::AptGet => "apt-get",
             PmKind::Apk => "apk",
             PmKind::Brew => "brew",
-            PmKind::Unknown => return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no package manager")),
         };
         let status = if self.kind == PmKind::Apk {
             Command::new(cmd).arg("add").arg(pkg).status()?
@@ -59,7 +57,11 @@ impl PackageManager {
         } else {
             Command::new(cmd).arg("install").arg("-y").arg(pkg).status()?
         };
-        if status.success() { Ok(()) } else { Err(std::io::Error::new(std::io::ErrorKind::Other, "install failed")) }
+        if status.success() {
+            Ok(())
+        } else {
+            Err(std::io::Error::other("install failed"))
+        }
     }
 }
 

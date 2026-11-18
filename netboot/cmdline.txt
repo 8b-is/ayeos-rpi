@@ -1,0 +1,1 @@
+console=serial0,115200 console=tty1 rdinit=/init ip=dhcp panic=10 quiet

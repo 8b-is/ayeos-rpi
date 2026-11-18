@@ -9,14 +9,12 @@ edition = "2021"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
+ratatui = { version = "0.28", optional = true }
+crossterm = { version = "0.27", optional = true }
 
 [features]
 default = []
 tui = ["ratatui", "crossterm"]
-
-[target.'cfg(feature = "tui")'.dependencies]
-ratatui = { version = "0.28", optional = true }
-crossterm = { version = "0.27", optional = true }
 
 [[bin]]
 name = "burner"

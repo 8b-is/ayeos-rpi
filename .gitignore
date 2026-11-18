@@ -1,0 +1,9 @@
+/build/
+/dist/
+target/
+*.o
+*.elf
+*.img
+*.cpio
+*.cpio.zst
+.DS_Store
