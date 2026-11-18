@@ -1,0 +1,15 @@
+# ayeos-rpi / config.txt — Raspberry Pi boot config (Pi 3 + Pi 4)
+# kernel8.img = 64-bit ARM kernel (loaded by VideoCore)
+kernel=kernel8.img
+# Enable UART for console output
+enable_uart=1
+# Force HDMI / display
+hdmi_force_hotplug=1
+config_hdmi_boost=4
+# Memory split (128MB GPU)
+gpu_mem=128
+# Device tree
+device_tree_address=0x100
+# Enable I2C / SPI as needed
+dtparam=i2c_arm=on
+dtparam=spi=on

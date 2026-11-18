@@ -1,0 +1,23 @@
+[workspace]
+
+# ayeos-rpi / burner / Cargo.toml
+[package]
+name = "burner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+[features]
+default = []
+tui = ["ratatui", "crossterm"]
+
+[target.'cfg(feature = "tui")'.dependencies]
+ratatui = { version = "0.28", optional = true }
+crossterm = { version = "0.27", optional = true }
+
+[[bin]]
+name = "burner"
+path = "src/main.rs"

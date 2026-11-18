@@ -1,0 +1,11 @@
+# ayeos-rpi / burner / config / devices.yaml — example device config
+# Example SD-card device entries the burner can target.
+devices:
+  - name: "Pi SD card"
+    path: "/dev/disk2"
+    size_gb: 32
+    read_only: false
+  - name: "eMMC"
+    path: "/dev/mmcblk0"
+    size_gb: 16
+    read_only: false
