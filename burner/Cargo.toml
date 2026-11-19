@@ -3,7 +3,7 @@
 # ayeos-rpi / burner / Cargo.toml
 [package]
 name = "burner"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]

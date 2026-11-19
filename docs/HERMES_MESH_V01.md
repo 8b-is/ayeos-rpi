@@ -1,23 +1,30 @@
-# Hermes + 5-Node Raspberry Pi (Pi 3B / Pi 4B) Sovereign Mesh — v0.2.0
+# Hermes + `8b-is/ultrameshai` + 5-Node Raspberry Pi Sovereign Mesh — v0.3.0
 
-This guide wires **Hermes** (either on your **MacBook via USB Ethernet dongle** or a **Pi 4B `node-0`**) with **Superpowers SDD × `ultracave`/`cavecrew` (`sdd-cavecrew`)**, **`g8t-plugins` (`sbc-pro`, `arm-master`)**, **`smart-tree`**, **Honcho**, **UltraGraph MCP (`stdio`)**, and **NVIDIA NIM API**, booting **Pi 3 Model B** and **Pi 4 Model B** workers statelessly into RAM over LAN.
+This guide wires **Hermes** (`~/.hermes/`) with **`8b-is/ultrameshai`** (`ClusterTopologyRouter` + `node-registry` + `custodian`), **`8b-is/ayeos-rpi` (`ayeos` CLI)**, **`8b-is/g8t-plugins`** (`sbc-pro`, `arm-master`, `esp32-pro`, `assembly-pro`, `retro-game-dev`), **`8b-is/ultra-graph`**, **`8b-is/smart-tree`**, **`8b-is/eightb-agy-fanout` (`8b-agy`)**, **`8b-is/kompress-super-ultra` / `bonobo`**, **`8b-is/omni-todos`**, **`8b-is/wa-stream`**, **`8b-is/omnispherepop`**, **`8b-is/mempalace`**, **`8b-is/space-bender`**, and **Honcho**.
 
-## 0. MacBook USB-Dongle Quick Launch (Recommended v0.2.0)
+## 0. MacBook USB-Dongle + `8b-is/ultrameshai` Quick Launch (v0.3.0)
 
 Plug a USB Ethernet dongle (`en4` / `en5` / `en7`) into your MacBook and connect it to the Ethernet switch holding the Raspberry Pis while keeping `en0` (Wi-Fi) online for NVIDIA API / Honcho:
 
 ```bash
-# 1. Discover attached USB Ethernet dongles (excludes Wi-Fi en0 / loopback / Thunderbolt)
+# 1. Inspect live 8b-is cluster ports, binaries, repos, and booted Pis
+ayeos mesh status
+
+# 2. Emit ~/.hermes/ultramesh_topology.toml (for 8b-is/ultrameshai) & ~/.hermes/8b_is_constellation.json
+ayeos mesh sync-topology
+
+# 3. Discover attached USB Ethernet dongles (excludes Wi-Fi en0 / loopback / Thunderbolt)
 ayeos dongle list
 
-# 2. (Optional, Pi 3B without OTP netboot) Stage a FAT32 SD card with bootcode.bin
+# 4. (Optional, Pi 3B without OTP netboot) Stage a FAT32 SD card with bootcode.bin
 ayeos burn pi3-sd --dir /Volumes/PI3BOOT --bootcode /path/to/bootcode.bin
 
-# 3. Assign 10.88.0.1/24 to the dongle and start pure-Rust PXE DHCP (Option 43) + TFTP + :18815 probe
+# 5. Assign 10.88.0.1/24, serve PXE DHCP (Option 43) + TFTP, probe :18815 & hot-update ultramesh_topology.toml
 sudo ayeos launch --iface en5 --tftp-dir dist/tftp
 
-# 4. Probe booted workers manually or inspect ~/.hermes/rpi_mesh_nodes.json
-ayeos ping --addrs 10.88.0.10:18815,10.88.0.11:18815
+# 6. Probe booted workers or route a capability via ultrameshai rules
+ayeos ping
+ayeos mesh route arm64
 ```
 
 ---

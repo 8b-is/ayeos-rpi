@@ -4,6 +4,7 @@
 
 mod burn;
 mod capsules;
+mod constellation;
 mod dhcp;
 mod dongle;
 mod mesh;
@@ -84,6 +85,11 @@ enum Commands {
         #[arg(long, default_value = "~/.hermes/rpi_mesh_nodes.json")]
         registry: PathBuf,
     },
+    /// Wire and inspect 8b-is/ultrameshai topology.toml + live 8b-is constellation
+    Mesh {
+        #[command(subcommand)]
+        cmd: MeshCmd,
+    },
     /// Verify published g8t.is pure-Rust scalar capsules locally
     Capsules,
     /// Push main + tags to GitHub origin, mirror to Codeberg, and push to g8t.is with transient G8T_TOKEN auth
@@ -147,6 +153,54 @@ enum BurnCmd {
         device: PathBuf,
         #[arg(long)]
         yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum MeshCmd {
+    /// Probe live 8b-is cluster ports, binaries, repos, and booted Pi workers
+    Status {
+        #[arg(long, default_value = "/Users/peterlodri/workspace/peterlodri-sec")]
+        workspace: PathBuf,
+        #[arg(long, default_value = "~/.hermes/rpi_mesh_nodes.json")]
+        registry: PathBuf,
+    },
+    /// Emit ultrameshai hot-reload topology.toml and 8b-is constellation manifest
+    SyncTopology {
+        #[arg(long, default_value = "10.88.0.1")]
+        server_ip: String,
+        #[arg(long, default_value = "~/.hermes/ultramesh_topology.toml")]
+        out: PathBuf,
+        #[arg(long, default_value = "~/.hermes/8b_is_constellation.json")]
+        manifest: PathBuf,
+        #[arg(long, default_value = "~/.hermes/rpi_mesh_nodes.json")]
+        registry: PathBuf,
+        #[arg(long, default_value = "/Users/peterlodri/workspace/peterlodri-sec")]
+        workspace: PathBuf,
+        #[arg(long)]
+        a6000_ip: Option<String>,
+        /// Optional host:port for signed heartbeat POST to 8b-is/ultrameshai node-registry
+        #[arg(long)]
+        node_registry: Option<String>,
+    },
+    /// Route a capability across ultrameshai topology.toml (Compute-first, Worker-fallback)
+    Route {
+        capability: String,
+        #[arg(long, default_value = "~/.hermes/ultramesh_topology.toml")]
+        topology: PathBuf,
+    },
+    /// Emit JSON manifest of all wired 8b-is constellation repositories
+    Manifest {
+        #[arg(long, default_value = "10.88.0.1")]
+        server_ip: String,
+        #[arg(long, default_value = "~/.hermes/ultramesh_topology.toml")]
+        topology: PathBuf,
+        #[arg(long, default_value = "~/.hermes/8b_is_constellation.json")]
+        out: PathBuf,
+        #[arg(long, default_value = "~/.hermes/rpi_mesh_nodes.json")]
+        registry: PathBuf,
+        #[arg(long, default_value = "/Users/peterlodri/workspace/peterlodri-sec")]
+        workspace: PathBuf,
     },
 }
 
@@ -247,6 +301,9 @@ async fn main() -> Result<()> {
         }
         Commands::Ping { addrs, registry } => {
             run_ping(addrs, expand_tilde(&registry)?).await?;
+        }
+        Commands::Mesh { cmd } => {
+            run_mesh_cmd(cmd).await?;
         }
         Commands::Capsules => {
             capsules::run_capsule_self_check()?;
@@ -371,6 +428,23 @@ async fn run_launch(
         registry_path.display()
     );
 
+    let topology_path = expand_tilde(Path::new("~/.hermes/ultramesh_topology.toml"))?;
+    let manifest_path = expand_tilde(Path::new("~/.hermes/8b_is_constellation.json"))?;
+    let workspace_root = PathBuf::from("/Users/peterlodri/workspace/peterlodri-sec");
+    let existing_nodes = mesh::read_hermes_registry(&registry_path);
+    if let Err(err) = constellation::sync_topology_and_manifest(
+        &server_ip,
+        &topology_path,
+        &manifest_path,
+        &existing_nodes,
+        &workspace_root,
+        None,
+    )
+    .await
+    {
+        eprintln!("[ultrameshai] initial topology sync skipped: {err}");
+    }
+
     let watcher = tokio::spawn(async move {
         while let Some(ev) = lease_rx.recv().await {
             if ev.msg_type == dhcp::DHCP_ACK {
@@ -382,8 +456,12 @@ async fn run_launch(
                     worker_port
                 );
                 let reg = registry_path.clone();
+                let topo = topology_path.clone();
+                let man = manifest_path.clone();
+                let coord_ip = server_ip.clone();
+                let ws = workspace_root.clone();
                 tokio::spawn(async move {
-                    mesh::probe_on_lease(ev.ip, worker_port, reg).await;
+                    mesh::probe_on_lease(ev.ip, worker_port, reg, topo, man, coord_ip, ws).await;
                 });
             }
         }
@@ -440,6 +518,148 @@ async fn run_ping(addrs: Vec<String>, registry_path: PathBuf) -> Result<()> {
 
     if ok_count == 0 {
         bail!("all {} worker pings failed", targets.len());
+    }
+    Ok(())
+}
+
+async fn run_mesh_cmd(cmd: MeshCmd) -> Result<()> {
+    match cmd {
+        MeshCmd::Status {
+            workspace,
+            registry,
+        } => {
+            let services = constellation::probe_services().await;
+            let binaries = constellation::probe_binaries();
+            let repos = constellation::probe_repos(&workspace);
+            let workers = mesh::read_hermes_registry(&expand_tilde(&registry)?);
+
+            println!("=== LIVE 8b-is SERVICES ===");
+            for s in &services {
+                println!(
+                    "{:<22} {:<16}:{:<6} {}",
+                    s.id,
+                    s.host,
+                    s.port,
+                    if s.up { "UP" } else { "down" }
+                );
+            }
+            println!("\n=== INSTALLED 8b-is BINARIES ===");
+            for b in &binaries {
+                println!(
+                    "{:<16} {}",
+                    b.name,
+                    b.path.as_deref().unwrap_or("missing")
+                );
+            }
+            println!("\n=== 8b-is REPOSITORIES ({}) ===", repos.len());
+            for r in &repos {
+                println!(
+                    "{:<22} {:<7} {}",
+                    r.name,
+                    if r.present_locally { "LOCAL" } else { "remote" },
+                    r.local_path.as_deref().unwrap_or(&r.github_url)
+                );
+            }
+            println!("\n=== BOOTED PI WORKERS ({}) ===", workers.len());
+            for w in &workers {
+                println!(
+                    "{:<18} {:<20} {:<16} seal={}",
+                    w.node_id, w.addr, w.model, w.seal
+                );
+            }
+        }
+        MeshCmd::SyncTopology {
+            server_ip,
+            out,
+            manifest,
+            registry,
+            workspace,
+            a6000_ip,
+            node_registry,
+        } => {
+            let out_p = expand_tilde(&out)?;
+            let man_p = expand_tilde(&manifest)?;
+            let reg_p = expand_tilde(&registry)?;
+            let workers = mesh::read_hermes_registry(&reg_p);
+            let (toml_text, man) = constellation::sync_topology_and_manifest(
+                &server_ip,
+                &out_p,
+                &man_p,
+                &workers,
+                &workspace,
+                a6000_ip.as_deref(),
+            )
+            .await?;
+
+            if let Some(nr_addr) = node_registry {
+                if let Ok(secret) = std::env::var("HEARTBEAT_SECRET") {
+                    if !secret.is_empty() {
+                        let caps: Vec<String> = man
+                            .services
+                            .iter()
+                            .filter(|s| s.up)
+                            .map(|s| s.capability.clone())
+                            .collect();
+                        let code = constellation::post_signed_heartbeat(
+                            &nr_addr,
+                            &secret,
+                            &server_ip,
+                            &caps,
+                            16384,
+                        )
+                        .await?;
+                        println!("[ultrameshai] signed POST /heartbeat -> HTTP {code}");
+                    }
+                }
+            }
+
+            println!("[ultrameshai] topology -> {}", out_p.display());
+            println!(
+                "[constellation] manifest -> {} (seal={})",
+                man_p.display(),
+                man.seal
+            );
+            print!("{toml_text}");
+        }
+        MeshCmd::Route {
+            capability,
+            topology,
+        } => {
+            let topo_p = expand_tilde(&topology)?;
+            let text = std::fs::read_to_string(&topo_p)
+                .with_context(|| format!("reading topology {}", topo_p.display()))?;
+            match constellation::route_capability_from_toml(&text, &capability) {
+                Some(node) => println!(
+                    "ROUTE {capability} -> {} ({}) caps={}",
+                    node.ip,
+                    node.role,
+                    node.capabilities.join(",")
+                ),
+                None => bail!("no node advertises capability `{capability}` in {}", topo_p.display()),
+            }
+        }
+        MeshCmd::Manifest {
+            server_ip,
+            topology,
+            out,
+            registry,
+            workspace,
+        } => {
+            let out_p = expand_tilde(&out)?;
+            let topo_p = expand_tilde(&topology)?;
+            let reg_p = expand_tilde(&registry)?;
+            let workers = mesh::read_hermes_registry(&reg_p);
+            let (_, man) = constellation::sync_topology_and_manifest(
+                &server_ip,
+                &topo_p,
+                &out_p,
+                &workers,
+                &workspace,
+                None,
+            )
+            .await?;
+            println!("{}", serde_json::to_string_pretty(&man)?);
+        }
     }
     Ok(())
 }

@@ -1,3 +1,4 @@
+use crate::constellation;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -97,7 +98,15 @@ pub fn upsert_registry_node(status: NodeStatus, path: &Path) -> Result<Vec<NodeS
     Ok(nodes)
 }
 
-pub async fn probe_on_lease(ip: Ipv4Addr, port: u16, registry_path: PathBuf) {
+pub async fn probe_on_lease(
+    ip: Ipv4Addr,
+    port: u16,
+    registry_path: PathBuf,
+    topology_path: PathBuf,
+    manifest_path: PathBuf,
+    coordinator_ip: String,
+    workspace_root: PathBuf,
+) {
     let addr = format!("{ip}:{port}");
     for delay_ms in [500u64, 2000, 5000] {
         tokio::time::sleep(Duration::from_millis(delay_ms)).await;
@@ -110,8 +119,22 @@ pub async fn probe_on_lease(ip: Ipv4Addr, port: u16, registry_path: PathBuf) {
                 status.skills_loaded,
                 status.seal
             );
-            if let Err(err) = upsert_registry_node(status, &registry_path) {
-                eprintln!("[mesh] registry write error: {err}");
+            match upsert_registry_node(status, &registry_path) {
+                Ok(nodes) => {
+                    if let Err(err) = constellation::sync_topology_and_manifest(
+                        &coordinator_ip,
+                        &topology_path,
+                        &manifest_path,
+                        &nodes,
+                        &workspace_root,
+                        None,
+                    )
+                    .await
+                    {
+                        eprintln!("[ultrameshai] topology sync error: {err}");
+                    }
+                }
+                Err(err) => eprintln!("[mesh] registry write error: {err}"),
             }
             return;
         }
