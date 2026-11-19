@@ -3,6 +3,7 @@
 #![deny(clippy::float_arithmetic)]
 
 mod burn;
+mod capsules;
 mod dhcp;
 mod dongle;
 mod mesh;
@@ -83,15 +84,17 @@ enum Commands {
         #[arg(long, default_value = "~/.hermes/rpi_mesh_nodes.json")]
         registry: PathBuf,
     },
-    /// Push main + tags to GitHub origin and mirror to g8t.is using transient G8T_TOKEN auth
+    /// Verify published g8t.is pure-Rust scalar capsules locally
+    Capsules,
+    /// Push main + tags to GitHub origin, mirror to Codeberg, and push to g8t.is with transient G8T_TOKEN auth
     ForgePush {
         /// Path to git repository
         #[arg(long, default_value = ".")]
         repo_dir: PathBuf,
-        /// Forge owner/org name on g8t.is
+        /// Forge owner/org name on Codeberg and g8t.is
         #[arg(long, default_value = "8b-is")]
         owner: String,
-        /// Forge repository name on g8t.is
+        /// Forge repository name
         #[arg(long, default_value = "ayeos-rpi")]
         repo: String,
     },
@@ -244,6 +247,19 @@ async fn main() -> Result<()> {
         }
         Commands::Ping { addrs, registry } => {
             run_ping(addrs, expand_tilde(&registry)?).await?;
+        }
+        Commands::Capsules => {
+            capsules::run_capsule_self_check()?;
+            println!(
+                "{:<30} {:<34} {:<18} {:<8} FKN",
+                "CAPSULE", "G8T_ID", "SIG", "CYC/OP"
+            );
+            for c in capsules::PUBLISHED_CAPSULES {
+                println!(
+                    "{:<30} {:<34} {:<18} {:<8} {}",
+                    c.name, c.id, c.signature, c.cycles_per_op_pq, c.foken_fkn
+                );
+            }
         }
         Commands::ForgePush {
             repo_dir,
@@ -446,6 +462,31 @@ fn run_forge_push(repo_dir: &Path, owner: &str, repo: &str) -> Result<()> {
         bail!("git push origin main --tags failed");
     }
     println!("[forge] GitHub origin synced (main + tags)");
+
+    let codeberg_git_url = format!("git@codeberg.org:{owner}/{repo}.git");
+    let cb_remote_check = Command::new("git")
+        .args(["-C", &repo_dir_str, "remote", "get-url", "codeberg"])
+        .output()?;
+    if !cb_remote_check.status.success() {
+        let _ = Command::new("git")
+            .args([
+                "-C",
+                &repo_dir_str,
+                "remote",
+                "add",
+                "codeberg",
+                &codeberg_git_url,
+            ])
+            .status()?;
+    }
+    let push_codeberg = Command::new("git")
+        .args(["-C", &repo_dir_str, "push", "codeberg", "main", "--tags"])
+        .status()
+        .context("pushing main and tags to Codeberg")?;
+    if !push_codeberg.success() {
+        bail!("git push codeberg main --tags failed (ensure {codeberg_git_url} exists)");
+    }
+    println!("[forge] Codeberg synced ({codeberg_git_url}, main + tags)");
 
     let g8t_git_url = format!("https://g8t.is/git/{owner}/{repo}");
     let remote_check = Command::new("git")
