@@ -1,41 +1,38 @@
-# ayeos-rpi — system architecture
+# ayeos-rpi — system architecture (v0.2.0)
 
 ## Component breakdown
 
 | Component | Responsibility | Language | Target |
 |---|---|---|---|
-| `kernel8` | Bare-metal ARM kernel (Pi 3 BCM2837, Pi 4 BCM2711), boot block, exception vectors, MMU, timer, UART | ARM asm + C | `aarch64-none-elf` / `arm-none-eabi` |
-| `ayeOS` | Minimal OS: init, drivers (UART, GPIO, SD/MMC), syscalls, fs (FAT), shell | C + asm | `aarch64-none-elf` |
-| `burner` | OS-agnostic SD-card image burner CLI, ratatui TUI, pkgmgr detection (apt/apk/brew) | Rust | host (Linux/macOS/BSD) |
-| `nullclaw` | On-device assistance agent, reads `~/.agents/skills/`, exposes local MCP-over-serial/TTY | Rust | `aarch64-unknown-linux-gnu` (on-device) |
+| `kernel8` | Bare-metal ARM kernel (Pi 3 BCM2837, Pi 4 BCM2711), boot block, exception vectors, MMU, timer, UART | ARM asm + C (`zig cc` + `llvm-objcopy`) | `aarch64-freestanding-none` |
+| `ayeOS` | Minimal OS: init, drivers (UART, GPIO, SD/MMC), syscalls, fs (FAT), shell | C + asm (`zig cc`) | `aarch64-freestanding-none` |
+| `ayeos` (`cli/`) | Sovereign MacBook USB-dongle mesh driver: pure-Rust BOOTP/DHCP (Option 43), RFC-1350/2348 TFTP, safe SD/bootcode burner, TCP `:18815` ping & `forge-push` | Rust | host (macOS/Linux) |
+| `burner` | Legacy SD-card / TFTP staging CLI, ratatui TUI, pkgmgr detection (`apt`/`apk`/`brew`) | Rust | host (Linux/macOS/BSD) |
+| `nullclaw` | On-device + LAN mesh worker daemon, reads `~/.agents/skills/` or `/etc/agents/skills`, exposes JSON-RPC 2.0 MCP over TCP `:18815` & stdio | Rust (`zig cc` musl / `wild`) | `aarch64-unknown-linux-musl` (static RAM initramfs) |
 
-## Interfaces
+## MacBook USB-Dongle → Ethernet Switch → 5-Node Pi Mesh Topology (v0.2.0)
 
-- **kernel8 → ayeOS**: kernel loads ayeOS image from SD/FAT into memory at `0x80000`, jumps to entry.
-- **ayeOS → nullclaw**: ayeOS provides a minimal POSIX-ish syscall layer; nullclaw runs as a userspace daemon reading skill files from `/mnt/skills` (SD card) or `~/.agents/skills`.
-- **burner → host pkgmgr**: detects `apt`/`apt-get`/`apk`/`brew` at runtime, uses the available one to install burner deps (`libusb`, `udev`).
-- **burner → SD card**: libusb/block-device write of `kernel8.img` + `ayeos.img` + config.
+```
+  [MacBook Pro]
+    ├── en0 (Wi-Fi) ──▶ Hermes coordinator + UltraGraph stdio MCP + Honcho + NVIDIA API
+    └── enX (USB Ethernet Dongle, 10.88.0.1/24)
+          └──▶ [5-Port Ethernet Switch]
+                 ├── node-1 (Pi 3B / Pi 4B) ── PXE DHCP Option 43 + TFTP ──▶ initramfs + nullclaw :18815
+                 ├── node-2 .. node-5        ── 10.88.0.10..250             ──▶ ~/.hermes/rpi_mesh_nodes.json
+```
 
 ## Version matrix
 
-| Board | SoC | CPU | Arch | kernel8 target |
+| Board | SoC | CPU | Arch | Netboot Path |
 |---|---|---|---|---|
-| Pi 3 / 3+ | BCM2837 | Cortex-A53 | AArch64 | `aarch64-none-elf` |
-| Pi 4 / 400 | BCM2711 | Cortex-A72 | AArch64 | `aarch64-none-elf` |
-
-Both use the same `kernel8.img` entry convention (`kernel8.img` = 64-bit, `kernel7.img` = 32-bit Pi 3).
-
-## Boot flow (Pi 3/4)
-
-1. VideoCore GPU boots, reads `config.txt`, loads `kernel8.img`.
-2. `kernel8` entry (`_start`) in `kernel/arch/aarch64/entry.S`: set up stack, clear BSS, set exception vectors (VBAR), enable timer, init UART (PL011 on Pi 3/4 miniuart vs PL011), jump to `kernel_main`.
-3. `kernel_main` (C): init drivers, mount FAT, load `ayeos.bin`, jump to `ayeos_entry`.
-4. `ayeOS`: init syscalls, fs shell, spawn `nullclaw` on `/dev/ttyAMA0` or `/dev/ttyS0`.
+| Pi 3 / 3+ | BCM2837 | Cortex-A53 (1 GB RAM) | AArch64 | FAT32 SD `bootcode.bin` + `timeout` (or OTP bit 17) → PXE + RAM `initramfs.cpio.zst` |
+| Pi 4 / 400 | BCM2711 | Cortex-A72 (2–8 GB RAM) | AArch64 | SPI EEPROM `BOOT_ORDER=0xf21` → PXE + RAM `initramfs.cpio.zst` |
 
 ## Files produced
 
-- `kernel8.img` — bootable kernel image
-- `ayeos.img` — ayeOS payload
-- `config.txt` — Pi boot config
-- `burner` — host CLI binary
-- `nullclaw` — on-device agent binary
+- `dist/kernel8.img` — bare-metal ARM64 kernel image (zero-GCC Zig/LLVM build)
+- `dist/ayeos.img` — ayeOS payload
+- `dist/initramfs.cpio.zst` — deterministic stateless worker RAM rootfs (`nullclaw` musl + `sbc-pro` + `arm-master`)
+- `dist/netboot-manifest.json` — SHA-256 digests, `p/q` compression ratio, and Bonobo resonance trit
+- `cli/target/release/ayeos` (`~/.cargo/bin/ayeos`) — MacBook USB-dongle launcher, burner & mesh CLI
+- `nullclaw/target/aarch64-unknown-linux-musl/release/nullclaw` — static musl on-device MCP worker

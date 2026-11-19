@@ -94,7 +94,7 @@ bonobo_trit = 0 if (raw_bytes == 0 or packed_bytes == 0 or raw_bytes == packed_b
 )
 
 manifest = {
-    "spec": "ayeos-rpi-netboot/0.1.0",
+    "spec": "ayeos-rpi-netboot/0.2.0",
     "toolchain": "zero-gcc (zig-0.17.1 + llvm/lld + musl)",
     "upx_in_initramfs": False,
     "artifacts": {

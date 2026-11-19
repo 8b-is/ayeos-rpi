@@ -1,6 +1,24 @@
-# Hermes + 5-Node Raspberry Pi (Pi 3B / Pi 4B) Sovereign Mesh — v0.1 PoC
+# Hermes + 5-Node Raspberry Pi (Pi 3B / Pi 4B) Sovereign Mesh — v0.2.0
 
-This guide wires **Hermes** (`node-0` coordinator) with **Superpowers SDD × `ultracave`/`cavecrew` (`sdd-cavecrew`)**, **`g8t-plugins` (`sbc-pro`, `arm-master`)**, **`smart-tree`**, **Honcho**, **UltraGraph MCP (`stdio`)**, and **NVIDIA NIM API**, booting **Pi 3 Model B** and **Pi 4 Model B** workers statelessly into RAM over LAN.
+This guide wires **Hermes** (either on your **MacBook via USB Ethernet dongle** or a **Pi 4B `node-0`**) with **Superpowers SDD × `ultracave`/`cavecrew` (`sdd-cavecrew`)**, **`g8t-plugins` (`sbc-pro`, `arm-master`)**, **`smart-tree`**, **Honcho**, **UltraGraph MCP (`stdio`)**, and **NVIDIA NIM API**, booting **Pi 3 Model B** and **Pi 4 Model B** workers statelessly into RAM over LAN.
+
+## 0. MacBook USB-Dongle Quick Launch (Recommended v0.2.0)
+
+Plug a USB Ethernet dongle (`en4` / `en5` / `en7`) into your MacBook and connect it to the Ethernet switch holding the Raspberry Pis while keeping `en0` (Wi-Fi) online for NVIDIA API / Honcho:
+
+```bash
+# 1. Discover attached USB Ethernet dongles (excludes Wi-Fi en0 / loopback / Thunderbolt)
+ayeos dongle list
+
+# 2. (Optional, Pi 3B without OTP netboot) Stage a FAT32 SD card with bootcode.bin
+ayeos burn pi3-sd --dir /Volumes/PI3BOOT --bootcode /path/to/bootcode.bin
+
+# 3. Assign 10.88.0.1/24 to the dongle and start pure-Rust PXE DHCP (Option 43) + TFTP + :18815 probe
+sudo ayeos launch --iface en5 --tftp-dir dist/tftp
+
+# 4. Probe booted workers manually or inspect ~/.hermes/rpi_mesh_nodes.json
+ayeos ping --addrs 10.88.0.10:18815,10.88.0.11:18815
+```
 
 ---
 

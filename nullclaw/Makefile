@@ -26,6 +26,7 @@ cross-musl:
 	CC_aarch64_unknown_linux_musl="$(CURDIR)/../scripts/zig-aarch64-musl-cc.sh" \
 	AR_aarch64_unknown_linux_musl="$(CURDIR)/../scripts/zig-aarch64-musl-ar.sh" \
 	CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER="$(CURDIR)/../scripts/zig-aarch64-musl-cc.sh" \
+	RUSTFLAGS="-C link-self-contained=no" \
 	$(CARGO) build --release --target $(ARCH_MUSL)
 
 # Legacy gnu target (prefer cross-musl for stateless initramfs)

@@ -15,6 +15,7 @@ KERNEL_DIR   := kernel
 AYEOS_DIR    := ayeos
 BURNER_DIR   := burner
 NULLCLAW_DIR := nullclaw
+CLI_DIR      := cli
 NETBOOT_DIR  := netboot
 BUILD_DIR    := build
 DIST_DIR     := dist
@@ -46,9 +47,9 @@ AYEOS_OBJS := $(patsubst $(AYEOS_DIR)/%,$(BUILD_DIR)/ayeos/%,$(AYEOS_SRCS:.c=.o)
 KERNEL_LINKER := $(KERNEL_DIR)/linker.ld
 AYEOS_LINKER  := $(AYEOS_DIR)/linker.ld
 
-.PHONY: all kernel ayeos burner nullclaw netboot clean dist flash run help
+.PHONY: all kernel ayeos burner nullclaw cli netboot launch clean dist flash run help
 
-all: kernel ayeos burner nullclaw dist
+all: kernel ayeos burner nullclaw cli dist
 
 kernel: $(KERNEL_IMG)
 
@@ -60,8 +61,14 @@ burner:
 nullclaw:
 	$(MAKE) -C $(NULLCLAW_DIR)
 
+cli:
+	$(MAKE) -C $(CLI_DIR)
+
 netboot:
 	bash $(NETBOOT_DIR)/pack_initramfs.sh
+
+launch: cli
+	./$(CLI_DIR)/target/release/ayeos dongle list
 
 dist: $(KERNEL_IMG) $(AYEOS_IMG)
 	@mkdir -p $(DIST_DIR)
@@ -98,6 +105,7 @@ clean:
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
 	$(MAKE) -C $(BURNER_DIR) clean 2>/dev/null || true
 	$(MAKE) -C $(NULLCLAW_DIR) clean 2>/dev/null || true
+	$(MAKE) -C $(CLI_DIR) clean 2>/dev/null || true
 
 flash: $(KERNEL_IMG) $(AYEOS_IMG)
 	@echo "Flash $(KERNEL_IMG) and $(AYEOS_IMG) to SD card, then insert into Pi 3/4."
@@ -106,4 +114,4 @@ run: $(KERNEL_IMG)
 	@echo "Boot kernel8.img on Pi 3/4 (QEMU: qemu-system-aarch64 -M raspi3b -kernel $(KERNEL_IMG))"
 
 help:
-	@echo "Targets: all kernel ayeos burner nullclaw netboot dist clean flash run"
+	@echo "Targets: all kernel ayeos burner nullclaw cli netboot launch dist clean flash run"
